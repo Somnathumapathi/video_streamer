@@ -7,3 +7,4 @@ class SecretKeys(BaseSettings):
     COGNITO_CLIENT_ID: str = ""
     COGNITO_CLIENT_SECRET: str = ""
     REGION_NAME: str = "ap-south-1"
+    POSTGRES_DB_URL: str = ""
