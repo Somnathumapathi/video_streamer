@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
+from db.base import Base
+from db.pgsdb import engine
 
 app = FastAPI()
 
@@ -24,3 +26,5 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 @app.get("/")
 def root():
     return {"message": "Hello World!"}
+
+Base.metadata.create_all(bind=engine)
