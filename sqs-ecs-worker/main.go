@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"sqs-ecs-worker/secrets"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
@@ -44,6 +47,7 @@ func main() {
 	}
 
 	sqsClient := sqs.NewFromConfig(cfg)
+	ecsClient := ecs.NewFromConfig(cfg)
 
 	for {
 		res, err := sqsClient.ReceiveMessage(
@@ -93,9 +97,47 @@ func main() {
 				fmt.Printf("Bucket: %s, Object: %s\n", bucketName, objectName)
 
 				//spin up a docker container to process the video
+				res, err := ecsClient.RunTask(ctx, &ecs.RunTaskInput{
+					Cluster:        &keys.ECS_CLUSTER,
+					TaskDefinition: &keys.ECS_TASK_DEFINITION,
+					LaunchType:     types.LaunchTypeFargate,
+					Overrides: &types.TaskOverride{
+						ContainerOverrides: []types.ContainerOverride{
+							{
+								Name: aws.String("video-transcoder"),
+								Environment: []types.KeyValuePair{
+									{
+										Name:  aws.String("S3_BUCKET"),
+										Value: aws.String(bucketName),
+									},
+									{
+										Name:  aws.String("S3_KEY"),
+										Value: aws.String(objectName),
+									},
+								},
+							},
+						},
+					},
+					NetworkConfiguration: &types.NetworkConfiguration{
+						AwsvpcConfiguration: &types.AwsVpcConfiguration{
+							Subnets:        keys.ECS_SUBNETS,
+							AssignPublicIp: types.AssignPublicIpEnabled,
+							SecurityGroups: keys.ECS_SECURITY_GROUPS,
+						},
+					},
+				})
+
+				if err != nil {
+					fmt.Println("Error running ECS task:", err)
+					continue
+				}
+				fmt.Println("ECS task:", res.Tasks[0].TaskArn)
+
+				sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+					QueueUrl:      &keys.SQS_VIDEO_PROCESSING_QUEUE_URL,
+					ReceiptHandle: message.ReceiptHandle,
+				})
 			}
 		}
-
-		fmt.Println("Received messages:", res.Messages)
 	}
 }
