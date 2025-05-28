@@ -1,5 +1,5 @@
 import boto3
-from sercrets_keys import SecretKeys
+from sercrets_keys import secret_keys as SecretKeys
 from enum import Enum
 import subprocess
 import os
@@ -9,7 +9,7 @@ class TranscoderType(Enum):
     DASH = "DASH"
 
 transcode_cmd = {
-    "HLS": lambda input_path, output_dir: [
+    TranscoderType.HLS: lambda input_path, output_dir: [
  "ffmpeg",
             "-i",
             input_path,
@@ -65,7 +65,7 @@ transcode_cmd = {
                 f"{output_dir}/%v/playlist.m3u8",
         ],
     
-    "DASH": lambda input_path, output_dir: [
+    TranscoderType.DASH: lambda input_path, output_dir: [
             "ffmpeg",
             "-i",
             input_path,
@@ -149,8 +149,8 @@ transcode_cmd = {
 
 
 class AdaptiveBitrateTranscoder:
-    def __init__(self, type: str):
-        self.type = str
+    def __init__(self, type: TranscoderType):
+        self.type = type
         # if str == "HLS":
         self.s3_client = boto3.client(
             's3',
@@ -170,8 +170,8 @@ class AdaptiveBitrateTranscoder:
         
     def download_video(self, local_path):
         self.s3_client.download_file(
-            SecretKeys.AWS_S3_BUCKET,
-            SecretKeys.AWS_S3_KEY,
+            SecretKeys.S3_BUCKET,
+            SecretKeys.S3_KEY,
             local_path
         )
 
@@ -190,7 +190,7 @@ class AdaptiveBitrateTranscoder:
                 
     def process_video(self):
         from pathlib import Path
-        work_dir = Path("temp/work_space")
+        work_dir = Path("/tmp/work_space")
         work_dir.mkdir(exist_ok=True)
         input_path = work_dir / "input.mp4"
         output_path = work_dir / "output"
@@ -199,7 +199,7 @@ class AdaptiveBitrateTranscoder:
         try:
             self.download_video(input_path)
             self.transcode_video(str(input_path), str(output_path))
-            self.upload_to_s3(SecretKeys.AWS_S3_KEY, str(output_path))
+            self.upload_to_s3(SecretKeys.S3_KEY, str(output_path))
         finally:
             if input_path.exists():
                 input_path.unlink()
